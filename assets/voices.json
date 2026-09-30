@@ -1,0 +1,36 @@
+{
+  "_note": "口播音色配置。引擎默认 MiniMax（整段合成，自然度更高）。密钥解析顺序：--api-key 参数 → 环境变量 MINIMAX_API_KEY → 配置文件 ~/.config/minimax/api_key，不入库。",
+  "engine": "minimax",
+  "minimax": {
+    "base_url": "https://api.minimaxi.com/v1/t2a_v2",
+    "note": "国内区域名只有 api.minimaxi.com / api.minimax.cn 有效；api.minimax.io 会 401。",
+    "chosen": {
+      "default": { "label": "少女（⭐默认）", "model": "speech-2.8-hd", "voice_id": "female-shaonv" },
+      "youth":   { "label": "青涩青年", "model": "speech-2.8-hd", "voice_id": "male-qn-qingse" },
+      "yujie":   { "label": "御姐",     "model": "speech-2.8-hd", "voice_id": "female-yujie" },
+      "tianmei": { "label": "甜美",     "model": "speech-2.8-hd", "voice_id": "female-tianmei" },
+      "news":    { "label": "新闻主播", "model": "speech-2.8-hd", "voice_id": "Chinese (Mandarin)_News_Anchor" }
+    },
+    "models_available": [
+      "speech-2.8-hd", "speech-2.8-turbo",
+      "speech-2.6-hd", "speech-2.6-turbo",
+      "speech-02-hd", "speech-02-turbo",
+      "speech-01-hd", "speech-01-turbo"
+    ],
+    "model_rule": "模型名必须全小写且版本号精确（status=0 的仅上表 8 个）；speech-2.5-*、无后缀、大小写变体均返回 2013 不可用。",
+    "voice_setting": { "speed": 1.0, "vol": 1.0, "pitch": 0 },
+    "audio_setting": { "sample_rate": 32000, "bitrate": 128000, "format": "mp3", "channel": 1 }
+  },
+  "edge_fallback": {
+    "_note": "免费备用（微软云端），无需密钥但需联网；自然度略逊 MiniMax。",
+    "engine": "edge-tts",
+    "chosen": {
+      "female": { "label": "女声-活泼", "voice": "zh-CN-XiaoyiNeural" },
+      "male":   { "label": "男声-青年", "voice": "zh-CN-YunxiNeural" }
+    }
+  },
+  "rejected": {
+    "engine": "kokoro-onnx", "voice": "zf_xiaobei",
+    "reason": "音色发闷发飘；且逐句合成 + 固定 0.35s 间隙 → 停顿生硬。改用整段合成。"
+  }
+}

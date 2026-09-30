@@ -1,0 +1,34 @@
+# ===== 密钥与凭证（绝不提交）=====
+.env
+*.key
+config/
+
+# ===== Python =====
+__pycache__/
+*.pyc
+.venv/
+
+# ===== Node =====
+node_modules/
+
+# ===== 管线运行产物（每次生成视频的中间/输出文件）=====
+script.txt
+scenes.json
+index.html
+narration*.mp3
+narration*.wav
+narration_words*.json
+timeline.json
+bgm*.wav
+visual*.mp4
+final*.mp4
+extracted_audio.wav
+renders/
+
+# ===== AI 工作区数据 =====
+.workbuddy/
+
+# ===== 操作系统杂项 =====
+.DS_Store
+Thumbs.db
+Desktop.ini
