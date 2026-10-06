@@ -40,6 +40,7 @@ Composition 就是一个 HTML 文件，根容器定义视频画布。
 <html>
 <head>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>window.gsap||document.write('<script src="https://unpkg.com/gsap@3.14.2/dist/gsap.min.js"><\/script>');</script>
 </head>
 <body>
   <div data-composition-id="main" data-start="0" data-width="1920" data-height="1080">
@@ -91,6 +92,7 @@ Composition 就是一个 HTML 文件，根容器定义视频画布。
 <html>
 <head>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>window.gsap||document.write('<script src="https://unpkg.com/gsap@3.14.2/dist/gsap.min.js"><\/script>');</script>
 </head>
 <body>
 <div data-composition-id="main" data-start="0" data-duration="TOTAL_SECONDS"

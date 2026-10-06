@@ -86,6 +86,7 @@ Sub-compositions use `<template>` wrapper:
       [data-composition-id="scene-intro"] { /* scoped styles */ }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>window.gsap||document.write('<script src="https://unpkg.com/gsap@3.14.2/dist/gsap.min.js"><\/script>');</script>
     <script>
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true });

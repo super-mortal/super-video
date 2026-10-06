@@ -123,6 +123,36 @@ window.__timelines["main"] = tl;
 '''
 
 
+# GSAP 加载链：主源 jsdelivr，回退源 unpkg。
+# jsdelivr 在国内可能连接被重置（HTTP 000），一旦拿不到 GSAP，场景停在
+# opacity:0，渲染会被判失败而中止。回退用 document.write 在解析期同步补一个
+# <script>，保证后面内联的时间轴脚本执行时 gsap 一定已就绪；主源成功加载时
+# 回退分支不执行。不要改用本地文件——本地路径在渲染环境不可用（硬约束 H4）。
+GSAP_SOURCES = (
+    "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js",
+    "https://unpkg.com/gsap@3.14.2/dist/gsap.min.js",
+)
+
+
+def build_gsap_scripts(sources: tuple[str, ...] = GSAP_SOURCES) -> str:
+    """Return the GSAP ``<script>`` chain: primary source plus fallbacks.
+
+    Only the first source is a plain ``<script src>``; every later source is
+    loaded via ``document.write`` and takes effect only when earlier sources
+    left ``window.gsap`` undefined. The closing tag is escaped as
+    ``<\\/script>`` so the HTML parser does not terminate the outer inline
+    script early. Add further fallback URLs to ``GSAP_SOURCES`` to extend the
+    chain -- the order is the try order.
+    """
+    parts = [f'<script src="{sources[0]}"></script>']
+    for url in sources[1:]:
+        parts.append(
+            "<script>window.gsap||document.write('"
+            f'<script src="{url}"><\\/script>'
+            "');</script>")
+    return "\n".join(parts)
+
+
 def build_html_document(
     timeline_data: dict,
     scene_data: dict,
@@ -170,7 +200,7 @@ def build_html_document(
 <html>
 <head>
   <meta charset="utf-8">
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+{build_gsap_scripts()}
 </head>
 <body>
 <div data-composition-id="{composition_id}" data-start="0" data-duration="{total}"

@@ -4,7 +4,7 @@ description: "超级视频：把写好的文案一键变成带中文配音与同
 license: MIT
 metadata:
   display_name: "超级视频"
-  version: "0.0.2"
+  version: "0.0.3"
   category: "video"
   platforms: ["Windows", "macOS", "Linux"]
   author: "super-mortal"
@@ -165,7 +165,7 @@ which ffmpeg && ffmpeg -version
 | H1 | 禁止 `Math.random()`/`Date.now()`/`new Date()`/`performance.now()` | 非确定性渲染导致帧不一致 |
 | H2 | 字体仅限白名单： Inter, JetBrains Mono, Roboto, sans-serif | 其他字体 lint 报错或渲染失败 |
 | H3 | 禁止 `@import url()` 引入字体 | Compiler 不支持，渲染卡死 |
-| H4 | GSAP CDN 必须用 jsdelivr URL（`https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js`），禁止本地 `lib/gsap.min.js` | 本地文件在渲染环境不可用 |
+| H4 | GSAP 以 jsdelivr 为主源、unpkg 为回退源（两行 `<script>` 加载链，见「渲染硬规则」），禁止本地 `lib/gsap.min.js` | jsdelivr 在国内可能连接被重置；缺 GSAP 时场景停在 `opacity:0`，渲染会被判失败而中止。本地文件在渲染环境不可用 |
 | H5 | `window.__timelines` 必须同步注册 | 异步注册导致空帧 |
 | H6 | 内容不可超出画布边界（任何像素） | 超出部分被裁切 |
 | H7 | 禁止 inline `style="top:XX%"` 覆盖定位 | 百分比定位跨场景不一致，导致溢出 |
@@ -292,7 +292,12 @@ repeat: Math.floor(duration / cycle) - 1
 
 ### 渲染硬规则（AI Agent 自动化环境必须遵守）
 
-1. **GSAP 保持 CDN URL**——Compiler 自动内联 CDN 脚本，本地路径会破坏渲染（H4）
+1. **GSAP 保持 CDN URL 并带同步回退**——主源 jsdelivr，失败自动换 unpkg：
+   ```html
+   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+   <script>window.gsap||document.write('<script src="https://unpkg.com/gsap@3.14.2/dist/gsap.min.js"><\/script>');</script>
+   ```
+   回退用 `document.write` 在解析期同步补载，保证下面内联的时间轴脚本执行时 `gsap` 已就绪；主源成功时回退分支不执行。本地路径会破坏渲染（H4）
 2. **字体禁止 @import**——CSS 里直接声明 `font-family`，Compiler 自动解析并缓存常见 Google Fonts（H3）
 3. **渲染时禁用 Agent 沙箱**——启动 Headless Chrome（Puppeteer）在沙箱内会挂起
 4. **命令加非交互旗标**——`init` 用 `--non-interactive`；`render` 用 `--quiet`（0.8.x 起已移除 `--non-interactive`）。旗标报 Unknown 时先 `--help` 核对当前版本
