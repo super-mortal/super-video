@@ -46,27 +46,38 @@ from task_paths import resolve_output
 
 
 DEFAULT_CSS = r'''
+:root {
+  --paper: #FDFBF7; --paper-2: #F5F5F5; --paper-3: #F7F4EE;
+  --ink: #1A1A1A; --ink-2: #4A4A4A; --ink-3: #6B7280;
+  --blue: #4D6BFE; --blue-d: #3B57D9; --blue-l: #6C85FF; --hl: #FFEE58;
+  --line: rgba(26,26,26,.14); --line-2: rgba(26,26,26,.07);
+  --shadow: 0 3px 0 rgba(26,26,26,.06);
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { margin: 0; overflow: hidden; }
-body { background: #07090f; font-family: "Inter", "JetBrains Mono", sans-serif;
-  color: #e6edf3; }
+body { background: var(--paper); font-family: "Inter", "JetBrains Mono", sans-serif;
+  color: var(--ink); }
 [data-composition-id="main"] { width: WIDTHpx; height: HEIGHTpx;
   position: relative; overflow: hidden; }
 
-#bg { position: absolute; inset: 0; z-index: 0; }
+#bg { position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(1100px 640px at 82% -14%, rgba(77,107,254,.085), transparent 62%),
+    radial-gradient(860px 560px at 3% 114%, rgba(255,238,88,.32), transparent 62%),
+    var(--paper); }
 #grid { position: absolute; inset: -60px;
   background-image:
-    linear-gradient(rgba(88,166,255,0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(88,166,255,0.06) 1px, transparent 1px);
-  background-size: 64px 64px; animation: drift 20s linear infinite; }
+    linear-gradient(var(--line-2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-2) 1px, transparent 1px);
+  background-size: 72px 72px; animation: drift 30s linear infinite; }
 @keyframes drift { from { transform: translate(0,0);}
-  to { transform: translate(64px,64px);} }
-.glow { position: absolute; border-radius: 50%; filter: blur(130px); }
-#g1 { width: 760px; height: 760px; left: -180px; top: -220px;
-  background: radial-gradient(circle, rgba(38,108,255,0.34), transparent 70%); }
-#g2 { width: 820px; height: 820px; right: -200px; bottom: -260px;
-  background: radial-gradient(circle, rgba(63,185,80,0.22), transparent 70%); }
-.particle { position: absolute; border-radius: 50%; background: rgba(88,166,255,0.55); }
+  to { transform: translate(72px,72px);} }
+.particle { position: absolute; border-radius: 50%; background: rgba(26,26,26,.20); }
+
+/* 顶部进度条（软默认 S16，始终输出；配色跟随 :root 调色板） */
+#prog { position: absolute; top: 0; left: 0; width: 100%; height: 6px;
+  background: linear-gradient(90deg, var(--blue) 0%, var(--blue-l) 62%, var(--hl) 100%);
+  transform: scaleX(0); transform-origin: left center; z-index: 90; }
 
 .scene { position: absolute; inset: 0; opacity: 0; z-index: 5; }
 .cols { position: absolute; top: 190px; left: 50%; transform: translateX(-50%);
@@ -77,10 +88,11 @@ body { background: #07090f; font-family: "Inter", "JetBrains Mono", sans-serif;
 .cap { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px;
   width: 92%; text-align: center; z-index: 60; }
 .cap-box { display: inline-block; font-size: 44px; font-weight: 700; line-height: 1.5;
-  color: #f2f6fb; letter-spacing: .02em; padding: 19px 42px; }
-/* 浅色/彩色画面场景在 scenes.json 设 "caption_bg": true，字幕加浅黑透明方框；
-   暗色场景（默认）不加底板，只留白字 */
-.cap.is-boxed .cap-box { background: rgba(0,0,0,.25); backdrop-filter: blur(6px); }
+  color: var(--ink); letter-spacing: .02em; padding: 19px 42px; }
+/* 复杂/深色画面场景在 scenes.json 设 "caption_bg": true，字幕加白色纸底板；
+   浅色纸底场景（默认）不加底板，只用墨字 */
+.cap.is-boxed .cap-box { background: rgba(255,255,255,.95);
+  border: 1px solid var(--line); border-radius: 4px; box-shadow: var(--shadow); }
 '''
 
 JS_TEMPLATE = r'''
@@ -118,6 +130,10 @@ SCENES.forEach((sc,i)=>{
   if(pop_elements.length) tl.from(pop_elements,
     {scale:0.55,opacity:0,duration:0.55,stagger:0.1,ease:'back.out(1.7)'},sc.s+0.5);
 });
+
+/* 顶部进度条：挂在同一条时间轴上，逐帧确定性推进（软默认 S16） */
+tl.fromTo('#prog', {scaleX:0},
+  {scaleX:1, duration:TOTAL, ease:'none', transformOrigin:'left center'}, 0);
 
 window.__timelines["main"] = tl;
 '''
@@ -207,11 +223,11 @@ def build_html_document(
      data-width="{width}" data-height="{height}">
 
   <div id="bg">
-    <div class="glow" id="g1"></div>
-    <div class="glow" id="g2"></div>
     <div id="grid"></div>
     <div id="particles"></div>
   </div>
+
+  <div id="prog"></div>
 
 {chr(10).join(blocks)}
 

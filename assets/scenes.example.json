@@ -1,6 +1,6 @@
 {
   "composition_id": "main",
-  "_note": "每场景只写画面 HTML；时间（data-start/data-duration）与整句字幕由 build_composition.py 从 timeline.json 注入。字幕默认静态整句、无底板（适合暗色场景）；浅色/复杂画面场景加 \"caption_bg\": true 获得浅黑透明方框。子元素 class='reveal' 入场，class='pop' 弹出。",
+  "_note": "每场景只写画面 HTML；时间（data-start/data-duration）与整句字幕由 build_composition.py 从 timeline.json 注入。字幕默认静态整句、无底板（适合浅色纸底场景）；复杂/深色画面场景加 \"caption_bg\": true 获得白色纸底板。子元素 class='reveal' 入场，class='pop' 弹出。",
   "scenes": [
     { "html": "<div class=\"cover\">\n  <div class=\"tag reveal\"><span class=\"dot\"></span> 开发环境 · 终端</div>\n  <h1 class=\"big reveal\">现代化命令行方案</h1>\n  <div class=\"cmd reveal\"><span class=\"p\">PS C:\\&gt;</span> <span class=\"t\">Windows Terminal + PowerShell 7</span><span class=\"caret\">▋</span></div>\n  <div class=\"sub reveal\">一次搭好 Windows 命令行底座 · 彻底告别 CMD</div>\n</div>" },
     { "html": "<div class=\"cols\">\n  <div class=\"dev-card reveal\">\n    <div class=\"dev-bar\"><span class=\"r\"></span><span class=\"y\"></span><span class=\"g\"></span><em>命令提示符 — cmd.exe</em></div>\n    <div class=\"cmd-body\"><span class=\"p\">C:\\&gt;</span> <span class=\"caret\">▋</span></div>\n    <div class=\"tags\">\n      <span class=\"reveal\">无多标签</span><span class=\"reveal\">不可配置</span><span class=\"reveal\">复制粘贴别扭</span>\n    </div>\n  </div>\n  <div class=\"verdict reveal\">一个字 · <b class=\"pop hl\">丑</b></div>\n</div>" },
