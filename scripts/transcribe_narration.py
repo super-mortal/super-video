@@ -5,14 +5,23 @@ for forced alignment.
 Usage:
     python transcribe_narration.py narration_16k.wav -o narration_words.json \
         --model small --lang zh
+    python transcribe_narration.py .super-video/my-task/audio/narration_16k.wav \
+        --workdir .super-video/my-task
 
 Outputs:
     narration_words.json           word-level [{id,text,start,end}, ...]
     narration_words_segments.json  segment-level [{start,end,text}, ...]
 
+    With --workdir the default output becomes
+    <workdir>/audio/narration_words.json.
+
 Dependency: pip install faster-whisper
 Note: for Chinese always pass --lang zh; never use .en models
 (they translate instead of transcribing).
+Note: whisper's Chinese default often emits Traditional characters,
+which makes build_timeline.py report a falsely low similarity
+(~0.6 even on a perfect match). The default --initial-prompt biases
+decoding toward Simplified; keep it unless you really want Traditional.
 """
 from __future__ import annotations
 
@@ -21,9 +30,11 @@ import json
 import sys
 from pathlib import Path
 
+from task_paths import resolve_output
+
 
 def transcribe_audio(
-    model: object, audio_path: str, lang: str
+    model: object, audio_path: str, lang: str, initial_prompt: str = ""
 ) -> tuple[list[dict], list[dict], str]:
     """Run word-level transcription and collect words and segments.
 
@@ -31,16 +42,21 @@ def transcribe_audio(
         model: A ready-to-use faster-whisper WhisperModel instance.
         audio_path: Path to the narration audio file.
         lang: Language code for recognition (e.g. ``zh``).
+        initial_prompt: Optional prompt biasing decoding. For Chinese,
+            pass a Simplified-Chinese sentence to make the model emit
+            Simplified characters (its default is often Traditional,
+            which badly lowers the downstream alignment similarity).
 
     Returns:
         A tuple ``(words, segments, language)`` where ``words`` holds
         word-level entries with ``w{N}`` ids, ``segments`` holds
         segment-level entries, and ``language`` is the detected language.
     """
-    raw_segments, info = model.transcribe(
-        audio_path, language=lang, word_timestamps=True,
-        vad_filter=True, beam_size=5,
-    )
+    kwargs = dict(language=lang, word_timestamps=True,
+                  vad_filter=True, beam_size=5)
+    if initial_prompt:
+        kwargs["initial_prompt"] = initial_prompt
+    raw_segments, info = model.transcribe(audio_path, **kwargs)
 
     words: list[dict] = []
     segments: list[dict] = []
@@ -89,21 +105,33 @@ def main() -> int:
     ap.add_argument("--model", default="small",
                     help="tiny/base/small/medium/large-v3")
     ap.add_argument("--lang", default="zh", help="language code, e.g. zh")
+    ap.add_argument(
+        "--initial-prompt", default="以下是普通话的句子，请用简体中文转写。",
+        help="decoding prompt; the Chinese default biases output toward "
+             "Simplified characters. Pass empty string to disable.")
     ap.add_argument("--device", default="cpu", help="cpu or cuda")
     ap.add_argument("--compute-type", default="int8", help="compute type")
-    ap.add_argument("-o", "--output", default="narration_words.json",
-                    help="output word-level JSON file path")
+    ap.add_argument("-o", "--output", default=None,
+                    help="output word-level JSON file path (default: "
+                         "<workdir>/audio/narration_words.json, or "
+                         "./narration_words.json when --workdir is omitted)")
+    ap.add_argument("--workdir", default=None,
+                    help="Task directory, e.g. .super-video/my-task; when set, "
+                         "the default output lands in <workdir>/audio/")
     args = ap.parse_args()
 
     from faster_whisper import WhisperModel
 
     model = WhisperModel(args.model, device=args.device,
                          compute_type=args.compute_type)
-    words, segments, language = transcribe_audio(model, args.audio, args.lang)
-    write_word_files(args.output, words, segments)
+    words, segments, language = transcribe_audio(
+        model, args.audio, args.lang, args.initial_prompt)
+    output_path = resolve_output(args.output, args.workdir, "audio",
+                                 "narration_words.json")
+    write_word_files(str(output_path), words, segments)
 
     print(f"OK words={len(words)} segments={len(segments)} lang={language}")
-    print(f"written: {args.output}")
+    print(f"written: {output_path}")
     return 0
 
 

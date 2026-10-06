@@ -4,6 +4,8 @@
 
 本章节覆盖 **对已有视频素材进行后期处理** 的完整流程——加字幕、叠特效、换背景、混音 BGM、画中画等。
 
+> 下文 `<任务>` = `.super-video/<任务名>/`：素材音频归 `audio/`、composition 归 `composition/`、无声半成品归 `render/`、成品归 `deliver/`（约定见 `SKILL.md` 的「产物目录约定」）。
+
 ## 目录
 
 1. [适用场景](#适用场景)
@@ -55,28 +57,29 @@ ffmpeg -ss 76 -t 10 -i input.mov -af volumedetect -f null /dev/null 2>&1 | grep 
 
 ```bash
 # 1. 从原视频提取完整音频
-ffmpeg -y -i input.mov -vn -acodec pcm_s16le -ar 44100 -ac 1 original_audio.wav
+ffmpeg -y -i input.mov -vn -acodec pcm_s16le -ar 44100 -ac 1 <任务>/audio/original_audio.wav
 
 # 2. HyperFrames 渲染视觉版（可以不放 <audio>，允许 silent visual output）
-npx hyperframes render --output visual.mp4
+#    在 <任务>/composition/ 内执行
+npx hyperframes render --output ../render/visual_v01.mp4
 
 # 3. 后置合成完整原音频
-ffmpeg -y -i visual.mp4 -i original_audio.wav \
+ffmpeg -y -i <任务>/render/visual_v01.mp4 -i <任务>/audio/original_audio.wav \
   -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k \
-  -t <video_duration> -movflags +faststart final.mp4
+  -t <video_duration> -movflags +faststart <任务>/deliver/<主题>_v01.mp4
 ```
 
 4. **最终必须验证音频完整性。** 不仅检查 `ffprobe` 时长，还要检查用户指出的尾段：
 
 ```bash
-ffprobe -v quiet -show_entries format=duration -show_entries stream=codec_type,duration -of default=noprint_wrappers=1 final.mp4
-ffmpeg -ss 76 -t 10 -i final.mp4 -af volumedetect -f null /dev/null 2>&1 | grep -E "mean_volume|max_volume"
+ffprobe -v quiet -show_entries format=duration -show_entries stream=codec_type,duration -of default=noprint_wrappers=1 <任务>/deliver/<主题>_v01.mp4
+ffmpeg -ss 76 -t 10 -i <任务>/deliver/<主题>_v01.mp4 -af volumedetect -f null /dev/null 2>&1 | grep -E "mean_volume|max_volume"
 ```
 
 #### B. 字幕与文案：用户给的精确文案优先级最高
 
 1. **用户明确指定某段字幕时，必须逐字使用用户原文。** 不要根据 ASR、记忆或模型理解自行“纠错”产品名。例如用户指定“Codex自动化剪辑视频”，不得改成 “QDesk”“QClaw” 或其它更合理的词。
-2. **每次修改字幕后必须定位对应 `cap-*`，只改目标时间段，不顺手改其它字幕。** 对 3s-7s 这类精确时间段，先在 `index.html` 中找到 `data-start`/`data-duration` 覆盖该区间的字幕节点，再替换文本。
+2. **每次修改字幕后必须定位对应 `cap-*`，只改目标时间段，不顺手改其它字幕。** 对 3s-7s 这类精确时间段，先在 `<任务>/composition/index.html` 中找到 `data-start`/`data-duration` 覆盖该区间的字幕节点，再替换文本。
 3. **避免交付前只报“已改”。** 对字幕修正必须在最终回答中列出改动后的准确文本，便于用户核对。
 
 #### C. 视觉迭代：严格按用户约束，不额外加效果
@@ -359,19 +362,20 @@ npx hyperframes transcribe existing.srt
 #### 基本混音（BGM + 原声）
 
 ```bash
-# 1. 渲染视频（无音频）
-npx hyperframes render --quiet
+# 1. 渲染视频（无音频），在 <任务>/composition/ 内执行
+npx hyperframes render --quiet --output ../render/visual_v01.mp4
 
 # 2. 提取原始旁白音频
-ffmpeg -i input.mp4 -vn -acodec pcm_s16le -ar 44100 -ac 2 voice.wav
+ffmpeg -i input.mp4 -vn -acodec pcm_s16le -ar 44100 -ac 2 <任务>/audio/voice.wav
 
 # 3. 混合：原声为主，BGM 为辅
-ffmpeg -i voice.wav -i bgm.wav -filter_complex \
+ffmpeg -i <任务>/audio/voice.wav -i <任务>/audio/bgm.wav -filter_complex \
   "[0:a]volume=1.0[voice];[1:a]volume=0.25[bgm];[voice][bgm]amix=inputs=2:duration=first" \
-  -ac 2 -ar 44100 mixed_audio.wav
+  -ac 2 -ar 44100 <任务>/audio/mixed_audio.wav
 
 # 4. 合并视频 + 混音
-ffmpeg -i rendered_video.mp4 -i mixed_audio.wav -c:v copy -c:a aac -shortest final.mp4
+ffmpeg -i <任务>/render/visual_v01.mp4 -i <任务>/audio/mixed_audio.wav \
+  -c:v copy -c:a aac -shortest <任务>/deliver/<主题>_v01.mp4
 ```
 
 #### 高级：BGM 自动避让（Ducking）
@@ -380,11 +384,11 @@ ffmpeg -i rendered_video.mp4 -i mixed_audio.wav -c:v copy -c:a aac -shortest fin
 
 ```bash
 # 使用 sidechaincompress 实现 ducking
-ffmpeg -i voice.wav -i bgm.wav -filter_complex \
+ffmpeg -i <任务>/audio/voice.wav -i <任务>/audio/bgm.wav -filter_complex \
   "[1:a]volume=0.35[bgm_vol];\
    [bgm_vol][0:a]sidechaincompress=threshold=0.02:ratio=4:attack=200:release=1000[bgm_ducked];\
    [0:a][bgm_ducked]amix=inputs=2:duration=first[out]" \
-  -map "[out]" -ac 2 -ar 44100 mixed_ducked.wav
+  -map "[out]" -ac 2 -ar 44100 <任务>/audio/mixed_ducked.wav
 ```
 
 **参数说明：**
@@ -597,7 +601,7 @@ typeTl.to(capEl.querySelectorAll('span'), {
   ⑧ hyperframes render
   ⑨ 音频处理（默认保留原片完整音频；仅在用户要求时混入 BGM）
   ⑩ 自检管线 Phase B-D
-  ⑪ 交付 final.mp4
+  ⑪ 交付 <任务>/deliver/<主题>_v01.mp4
 ```
 
 **AI 默认选择（用户未指定时）：**

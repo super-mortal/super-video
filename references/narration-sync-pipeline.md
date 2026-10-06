@@ -14,14 +14,16 @@
 
 ```
 文案 script.txt
-   │ ① MiniMax 整段合成          → narration.mp3/.wav/_16k.wav（真实时长）
-   │ ② faster-whisper 词级转写     → narration_words.json（每词的 start/end）
-   │ ③ 文案字符 ↔ 词级字符 强制对齐  → timeline.json（每句/每词的准确时间）
-   │ ④ 数据驱动生成               → index.html（时间从 timeline.json 注入）
-   │ ⑤ HyperFrames 渲染           → visual.mp4（无声视觉）
-   │ ⑥ FFmpeg 后置合成            → final.mp4（含旁白）
+   │ ① MiniMax 整段合成          → audio/narration.mp3/.wav/_16k.wav（真实时长）
+   │ ② faster-whisper 词级转写     → audio/narration_words.json（每词的 start/end）
+   │ ③ 文案字符 ↔ 词级字符 强制对齐  → audio/timeline.json（每句/每词的准确时间）
+   │ ④ 数据驱动生成               → composition/index.html（时间从 timeline.json 注入）
+   │ ⑤ HyperFrames 渲染           → render/visual_v01.mp4（无声视觉）
+   │ ⑥ FFmpeg 后置合成            → deliver/<主题>_v01.mp4（含旁白）
    │ ⑦ 验证                      → verify_audio.py + 抽帧
 ```
+
+以上路径均相对任务目录 `.super-video/<任务名>/`；目录约定与各步骤命令见 `SKILL.md` 的「产物目录约定」与「核心管线」。
 
 ---
 
@@ -111,13 +113,15 @@ B:  p o w e r  s h e l l 七        → "7"↔"七" 不同，插值处理
 
 ## 6. 渲染与后置合成
 
-1. HyperFrames 渲染的是**无声视觉版**（`visual.mp4`）。不要依赖内置 `<audio>`——≥30s 会在约 32s 截断（H9）。
+1. HyperFrames 渲染的是**无声视觉版**（`render/visual_v01.mp4`）。不要依赖内置 `<audio>`——≥30s 会在约 32s 截断（H9）。
 2. FFmpeg 后置合成旁白：
    ```bash
-   python scripts/merge_audio.py visual.mp4 narration.wav -o final.mp4
+   python <skill>/scripts/merge_audio.py <任务>/render/visual_v01.mp4 \
+       <任务>/audio/narration.wav --workdir <任务>
    ```
+   - 默认成品落在 `<任务>/deliver/<任务名>_v01.mp4`；用户认可后加 `--version final`；
    - 旁白为准，`apad`+`atrim` 对齐到视频长度；
-   - 可选 `--bgm bgm.wav --bgm-gain -26` 铺底；
+   - 可选 `--bgm <任务>/audio/bgm.wav --bgm-gain -26` 铺底；
    - `-c:v copy` 视频不重编码，只加 AAC 音轨。
 
 ---
@@ -127,7 +131,7 @@ B:  p o w e r  s h e l l 七        → "7"↔"七" 不同，插值处理
 | 项 | 命令 / 方法 | 通过标准 |
 |----|-----------|---------|
 | lint | `npx hyperframes lint` | 0 error |
-| 音频时长覆盖 | `verify_audio.py final.mp4 --min-duration <root>` | 通过 |
+| 音频时长覆盖 | `verify_audio.py <任务>/deliver/<主题>_v01.mp4 --min-duration <root>` | 通过 |
 | 尾段非静音 | 同上（`--tail-seconds 12`） | 每秒 RMS > -30dB |
 | 画面完整性 | 每场景中段抽帧 | 无裁切/溢出/重叠 |
 | **字幕完整** | 抽帧看长句字幕 | 不截断、不溢出画布 |
@@ -151,29 +155,40 @@ B:  p o w e r  s h e l l 七        → "7"↔"七" 不同，插值处理
 
 ## 9. 完整命令序列（复制即用）
 
+> `<skill>` 指本技能所在目录，`<任务>` 指 `.super-video/<任务名>`。
+
 ```bash
+# ⓿ 开任务目录，把文案写进 <任务>/script.txt
+mkdir -p <任务>
+
 # ① 合成（需 MINIMAX_API_KEY）
-python scripts/minimax_narrate.py script.txt -o narration \
-    --model speech-2.8-hd --voice female-shaonv
+python <skill>/scripts/minimax_narrate.py <任务>/script.txt \
+    --workdir <任务> --model speech-2.8-hd --voice female-shaonv
 
 # ② 转写
-python scripts/transcribe_narration.py narration_16k.wav -o narration_words.json
+python <skill>/scripts/transcribe_narration.py <任务>/audio/narration_16k.wav \
+    --workdir <任务>
 
 # ③ 对齐
-python scripts/build_timeline.py script.txt narration_words.json narration.wav -o timeline.json
+python <skill>/scripts/build_timeline.py <任务>/script.txt \
+    <任务>/audio/narration_words.json <任务>/audio/narration.wav --workdir <任务>
 
-# ④ 生成 HTML（画面写在 scenes.json）
-python scripts/build_composition.py timeline.json scenes.json \
-    -o index.html --theme assets/theme.css
+# ④ 生成 HTML（画面写在 <任务>/scenes.json）
+python <skill>/scripts/build_composition.py <任务>/audio/timeline.json \
+    <任务>/scenes.json --workdir <任务> --theme <skill>/assets/theme.css
 
-# ⑤ lint + 渲染
+# ⑤ lint + 渲染（在 composition/ 内执行，先草稿再成片）
+cd <任务>/composition
 npx hyperframes lint
-npx hyperframes render --quality draft --output visual_draft.mp4   # 先草稿
-npx hyperframes render --quality high  --output visual.mp4         # 再成片
+npx hyperframes render --quality draft --output ../render/visual_v01_draft.mp4
+npx hyperframes render --quality high  --output ../render/visual_v01.mp4
+cd -
 
-# ⑥ 后置合成
-python scripts/merge_audio.py visual.mp4 narration.wav -o final.mp4
+# ⑥ 后置合成（成品落 <任务>/deliver/<任务名>_v01.mp4）
+python <skill>/scripts/merge_audio.py <任务>/render/visual_v01.mp4 \
+    <任务>/audio/narration.wav --workdir <任务>
 
 # ⑦ 验证
-python scripts/verify_audio.py final.mp4 --min-duration <root_duration> --tail-seconds 12
+python <skill>/scripts/verify_audio.py <任务>/deliver/<任务名>_v01.mp4 \
+    --min-duration <root_duration> --tail-seconds 12
 ```

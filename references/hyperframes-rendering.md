@@ -260,7 +260,7 @@ tl.to("#scene-N", { opacity: 0, duration: 0.5 }, SCENE_END - 0.6);
 - 禁止把 video 嵌进计时 div——用非计时 wrapper 包裹
 - **长 BGM 警告**：HyperFrames 内置音频处理可能在约 32s 处截断长背景音乐（即使源音频和 `data-duration` 更长）。渲染后必须抽出音频流验证解码时长与 RMS；`volumedetect -ss 30 -t 12` 有误导性（只分析已有采样）。
 - **可靠的长 BGM 工作流**：先渲染视觉视频，再用 FFmpeg 从全长 WAV 后置合成音频：
-  `ffmpeg -i rendered.mp4 -i bgm_full.wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -t <composition_duration> -movflags +faststart final.mp4`，再抽 `final.mp4` 音频逐秒验证 RMS 到底。
+  `ffmpeg -i <任务>/render/visual_v01.mp4 -i <任务>/audio/bgm.wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k -t <composition_duration> -movflags +faststart <任务>/deliver/<主题>_v01.mp4`，再抽该成品的音频逐秒验证 RMS 到底。
 
 ### 2.5 内容高度预算与卡片布局（软默认）
 
@@ -339,7 +339,7 @@ npx hyperframes inspect --json    # Agent 可读结果
 npx hyperframes render                          # 标准 MP4
 npx hyperframes render --quality draft          # 快速迭代（约 3 倍速）
 npx hyperframes render --quality high --fps 60  # 最终交付
-npx hyperframes render --output final.mp4       # 自定义文件名
+npx hyperframes render --output ../render/visual_v01.mp4   # 自定义输出路径
 npx hyperframes render --format webm            # 透明 WebM
 npx hyperframes render --docker                 # 字节级一致
 ```
@@ -432,30 +432,34 @@ npx hyperframes remove-background portrait.jpg -o cutout.png
 
 ## 8. 长音频 BGM 工作流
 
+> 路径均相对任务目录 `<任务>` = `.super-video/<任务名>/`（约定见 `SKILL.md` 的「产物目录约定」）。
+
 超过 30s 的视频不要依赖 HyperFrames 内的短音频循环，按以下流程：
 
-1. 生成或准备全长 WAV，时长至少 `root_duration + 3s`。
-2. 用 HyperFrames 渲染视觉视频（`<audio>` 的 `data-duration` 可以照写，但**不要相信渲染出的音频**）。
+1. 生成或准备全长 WAV，时长至少 `root_duration + 3s`，放在 `<任务>/audio/bgm.wav`。
+2. 用 HyperFrames 渲染视觉视频到 `<任务>/render/visual_v01.mp4`（`<audio>` 的 `data-duration` 可以照写，但**不要相信渲染出的音频**）。
 3. 用 FFmpeg 从 WAV 源替换/合成最终音频：
 
 ```bash
-ffmpeg -y -i rendered.mp4 -i bgm_full.wav -map 0:v:0 -map 1:a:0 \
-  -c:v copy -c:a aac -b:a 192k -t <root_duration+0.02> \
-  -movflags +faststart final.mp4
+ffmpeg -y -i <任务>/render/visual_v01.mp4 -i <任务>/audio/bgm.wav \
+  -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k \
+  -t <root_duration+0.02> -movflags +faststart <任务>/deliver/<主题>_v01.mp4
 ```
 
-4. 验证最终 MP4：抽出音频流，检查真实解码时长与逐秒 RMS：
+4. 验证最终 MP4：查音频流真实解码时长，并测逐秒 RMS：
 
 ```bash
-ffmpeg -y -i final.mp4 -vn -ac 1 -ar 44100 extracted_audio.wav
-ffprobe -v quiet -show_entries format=duration -show_entries stream=codec_type,duration -of default=noprint_wrappers=1 final.mp4
-ffmpeg -ss <root_duration-12> -t 12 -i final.mp4 -af volumedetect -f null /dev/null 2>&1 | grep -E "mean_volume|max_volume"
+ffprobe -v error -select_streams a:0 \
+  -show_entries stream=codec_name,duration -of csv=p=0 <任务>/deliver/<主题>_v01.mp4
+ffmpeg -ss <root_duration-12> -t 12 -i <任务>/deliver/<主题>_v01.mp4 \
+  -af volumedetect -f null /dev/null 2>&1 | grep -E "mean_volume|max_volume"
 ```
 
 脚本辅助：
 
 ```bash
-python scripts/verify_audio.py final.mp4 --min-duration <root_duration> --tail-seconds 12
+python <skill>/scripts/verify_audio.py <任务>/deliver/<主题>_v01.mp4 \
+  --min-duration <root_duration> --tail-seconds 12
 ```
 
 BGM 检查通过标准：
@@ -469,7 +473,7 @@ BGM 检查通过标准：
 脚本辅助（本地 BGM 生成，无外部依赖）：
 
 ```bash
-python scripts/generate_bgm.py bgm.wav --duration <root_duration+3> --bpm 110 --volume 0.25
+python <skill>/scripts/generate_bgm.py --workdir <任务> --duration <root_duration+3> --bpm 110 --volume 0.25
 ```
 
 ### 场景时长与根时长

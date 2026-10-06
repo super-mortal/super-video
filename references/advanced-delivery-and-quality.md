@@ -434,47 +434,51 @@ If render exceeds 20 minutes for a ≤ 60s video:
 
 ## Delivery & File Management (P2)
 
+> 目录约定见 `SKILL.md` 的「产物目录约定」；下文 `<任务>` = `.super-video/<任务名>/`。
+
 ### File Naming Convention
 
-```text
-{project_name}_{version}_{quality}.mp4
+成品放在 `<任务>/deliver/`，命名 `<主题>_<版本>.mp4`：
 
-Examples:
-  ai_coding_video_v1_standard.mp4      ← first delivery
-  ai_coding_video_v2_standard.mp4      ← after layout fix
-  ai_coding_video_v3_standard.mp4      ← after content update
-  ai_coding_video_final_standard.mp4   ← user-approved final
+```text
+ai编程_v01.mp4      ← 首次交付
+ai编程_v02.mp4      ← 修过布局之后
+ai编程_v03.mp4      ← 改过文案之后
+ai编程_final.mp4    ← 用户认可的定稿
 ```
+
+半成品（无声视觉版）放在 `<任务>/render/`，命名 `visual_v01.mp4` / `visual_v01_draft.mp4`。
 
 ### Intermediate File Cleanup
 
-After user approves a final version:
+用户认可定稿后才考虑清理，且**必须先问**：
+
 ```bash
-# Keep: final approved MP4, source HTML, bgm.wav
-# Remove: intermediate renders
-rm -f render_v1.mp4 render_v2.mp4 render_v3.mp4
-rm -f final_ai_coding_v1.mp4 final_ai_coding_v2.mp4
-# Keep: final_ai_coding_v3.mp4 (or rename to _final)
+# 保留：deliver/ 里的定稿、composition/index.html、audio/ 音源
+# 可清理：render/ 里的过期半成品
+rm -f <任务>/render/visual_v02_draft.mp4
 ```
 
-**Rule**: Never auto-delete intermediate files without user confirmation. Ask: "是否清理中间渲染文件？只保留最终版本。"
+**Rule**: 未经用户确认绝不自动删除任何文件。问：「是否清理中间渲染文件？只保留最终版本。」
 
 ### Delivery Checklist
 
 Before calling `deliver_attachments`:
-1. ✅ File is the post-mux version (not raw render)
+1. ✅ File is the post-mux version (not raw render) — 必须来自 `deliver/`
 2. ✅ Audio verified (Phase C checks passed)
 3. ✅ File size reasonable (1080p 42s ≈ 5-15MB for standard quality)
 4. ✅ Filename clearly indicates version
 
 ### What to Preserve for Future Edits
 
-Always keep in project directory:
-- `index.html` — source composition (for re-editing)
-- `original_audio.wav` — extracted original audio for existing-video edits, when source audio must be preserved
-- `bgm.wav` — approved BGM audio only when the project uses generated or external BGM
-- Customized copies of bundled helper scripts only if they were modified for this project (`scripts/verify_audio.py`, `scripts/generate_bgm.py` remain available in the Skill package)
-- Final approved `.mp4` — the delivered product
+留在任务目录 `<任务>/` 里，供后续返工：
+- `composition/index.html` — 画面源文件（重新编辑用）
+- `audio/narration.wav` — 旁白音源
+- `audio/timeline.json` — 真实时间轴（换音色重跑时复用画面）
+- `audio/bgm.wav` — 仅当项目用了生成或外部 BGM
+- `scenes.json` — 画面脚本
+- `deliver/` 里的定稿 MP4 — 交付产物
+- 打包在技能内的辅助脚本（`scripts/verify_audio.py`、`scripts/generate_bgm.py`）无需复制到任务目录，技能包内始终可用
 
 ## Quality Checklist (Final Gate — 交付前必过)
 

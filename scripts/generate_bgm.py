@@ -3,6 +3,13 @@
 
 Use only when the user explicitly requests generated background music or when
 there is no source audio to preserve. The script uses Python stdlib only.
+
+Usage:
+    python generate_bgm.py bgm.wav --duration 42
+    python generate_bgm.py --workdir .super-video/my-task --duration 42
+
+    With --workdir and no explicit output, the BGM is written to
+    <workdir>/audio/bgm.wav.
 """
 
 from __future__ import annotations
@@ -13,6 +20,8 @@ import random
 import struct
 import wave
 from pathlib import Path
+
+from task_paths import resolve_output
 
 
 def clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
@@ -138,7 +147,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate a simple full-length ambient BGM WAV."
     )
-    parser.add_argument("output", type=Path, help="Output WAV path")
+    parser.add_argument("output", type=Path, nargs="?", default=None,
+                        help="Output WAV path (default: <workdir>/audio/bgm.wav)")
+    parser.add_argument("--workdir", default=None,
+                        help="Task directory, e.g. .super-video/my-task; when "
+                             "set and no output path is given, the BGM lands "
+                             "in <workdir>/audio/bgm.wav")
     parser.add_argument(
         "--duration", type=float, required=True, help="Duration in seconds"
     )
@@ -152,16 +166,19 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    if args.output is None and not args.workdir:
+        parser.error("provide an output path or --workdir")
+    output_path = resolve_output(args.output, args.workdir, "audio", "bgm.wav")
+
     synthesize_track(
-        output_path=args.output,
+        output_path=output_path,
         duration_sec=args.duration,
         bpm=args.bpm,
         sample_rate=args.sample_rate,
         volume=args.volume,
         seed=args.seed,
     )
-    print(f"Generated {args.output} ({args.duration:.2f}s, {args.bpm:.1f} BPM)")
+    print(f"Generated {output_path} ({args.duration:.2f}s, {args.bpm:.1f} BPM)")
     return 0
 
 

@@ -11,6 +11,8 @@ interpolation to obtain accurate per-word times.
 Usage:
     python build_timeline.py script.txt narration_words.json narration.wav \
         -o timeline.json
+    python build_timeline.py script.txt narration_words.json narration.wav \
+        --workdir .super-video/my-task
 
 Inputs:
     script.txt            narration script (one sentence per line)
@@ -20,6 +22,8 @@ Inputs:
 
 Output:
     timeline.json  { total, audio, scenes:[{id,text,start,end,words:[[tok,s,e],...]}] }
+
+    With --workdir the default output becomes <workdir>/audio/timeline.json.
 
 build_composition.py later reads timeline.json to build index.html.
 """
@@ -34,6 +38,7 @@ import sys
 from pathlib import Path
 
 from text_units import CJK_RE, LATIN_RE, tokenize
+from task_paths import resolve_output
 
 
 def is_content_char(char: str) -> bool:
@@ -186,6 +191,13 @@ def build_timeline(script_lines: list[str], words: list[dict],
     print(f"align: script_chars={len(char_time)} "
           f"whisper_chars={len(whisper_chars)} "
           f"audio={audio_duration:.2f}s similarity={similarity:.3f}")
+    if similarity < 0.85:
+        print("  note: similarity < 0.85. Two usual causes: (1) the script "
+              "was edited without re-synthesizing the audio; (2) whisper "
+              "emitted Traditional Chinese while the script is Simplified "
+              "— re-run transcribe_narration.py keeping its default "
+              "--initial-prompt (Simplified bias) before assuming the "
+              "alignment is broken.")
 
     scenes = assign_token_times(script_lines, char_time)
     apply_scene_cuts(scenes, audio_duration, lead, tail)
@@ -216,8 +228,13 @@ def main() -> int:
                         help="faster-whisper word-level JSON [{text,start,end}, ...]")
     parser.add_argument("audio",
                         help="44.1kHz synthesized narration audio (WAV)")
-    parser.add_argument("-o", "--output", default="timeline.json",
-                        help="output JSON path (default: timeline.json)")
+    parser.add_argument("-o", "--output", default=None,
+                        help="output JSON path (default: <workdir>/audio/"
+                             "timeline.json, or ./timeline.json when "
+                             "--workdir is omitted)")
+    parser.add_argument("--workdir", default=None,
+                        help="Task directory, e.g. .super-video/my-task; when "
+                             "set, the default output lands in <workdir>/audio/")
     parser.add_argument("--lead", type=float, default=0.12,
                         help="lead time before scene cuts in seconds (default: 0.12)")
     parser.add_argument("--tail", type=float, default=0.9,
@@ -234,11 +251,13 @@ def main() -> int:
 
     timeline = build_timeline(script_lines, words, audio_duration,
                               lead=args.lead, tail=args.tail)
-    write_timeline(args.output, timeline)
+    output_path = resolve_output(args.output, args.workdir, "audio",
+                                 "timeline.json")
+    write_timeline(str(output_path), timeline)
 
     print(f"\nTOTAL(audio)={audio_duration:.2f}s  video={timeline['total']:.2f}s"
           f"  scenes={len(timeline['scenes'])}")
-    print(f"written: {args.output}")
+    print(f"written: {output_path}")
     return 0
 
 

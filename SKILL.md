@@ -4,7 +4,7 @@ description: "超级视频：把写好的文案一键变成带中文配音与同
 license: MIT
 metadata:
   display_name: "超级视频"
-  version: "0.0.1"
+  version: "0.0.2"
   category: "video"
   platforms: ["Windows", "macOS", "Linux"]
   author: "super-mortal"
@@ -32,6 +32,41 @@ metadata:
 - 动画画面完全可定制：布局、配色、动画、字体均由 HTML/CSS 控制
 - AI 全流程自动化：配音 → 对齐 → 生成画面 → 渲染 → 混音 → 交付
 - 支持按需 BGM 合成与音量调校，内置自检管线确保成片质量
+
+---
+
+## 产物目录约定
+
+在**当前工作目录**下开一个 `.super-video/<任务名>/` 作为本次任务的工作区，一次任务的全部产物都放进这个目录，不散落到工作目录里。
+
+```
+.super-video/<任务名>/
+├── script.txt          输入：旁白文案（每行一句）
+├── scenes.json         输入：每场景画面描述（只写画面，不写时间）
+├── audio/              音频与时间轴
+│   ├── narration.mp3               原始合成音频
+│   ├── narration.wav               44.1kHz 立体声（混音用）
+│   ├── narration_16k.wav           16kHz 单声道（转写用）
+│   ├── narration_words.json        词级时间戳
+│   ├── narration_words_segments.json
+│   ├── timeline.json               真实时间轴（唯一真源）
+│   └── bgm.wav                     可选背景乐
+├── composition/        HTML 画面（index.html）
+├── render/             半成品：无声视觉版
+│   ├── visual_v01_draft.mp4
+│   └── visual_v01.mp4
+└── deliver/            成品：含配音的成片
+    ├── <主题>_v01.mp4
+    └── <主题>_final.mp4
+```
+
+**规则：**
+
+- `<任务名>` 用简短标识，例：`.super-video/deepseek`。
+- 四类子目录各司其职：`audio/` 只放音频与时间轴，`composition/` 只放 HTML，`render/` 只放无声半成品，`deliver/` 只放最终成片。
+- 只有 `deliver/` 里的成片交付给用户；其余都是过程产物，留在任务目录里不交付，也不主动清理。
+- 所有脚本支持 `--workdir <任务目录>`：默认产物落到对应子目录，父目录按需自动创建；显式 `-o/--output` 仍优先，按原样使用。不带 `--workdir` 时保持旧行为（落在当前目录）。
+- 版本命名：首次 `_v01`，返工递增 `_v02`…，用户认可后定稿 `_final`。
 
 ---
 
@@ -272,57 +307,73 @@ repeat: Math.floor(duration / cycle) - 1
 
 ### 数据流
 
+下图路径均相对 `.super-video/<任务名>/`：
+
 ```
 script.txt（每行一句）
-   │ ① minimax_narrate.py         MiniMax 整段合成           → narration.mp3 / .wav / _16k.wav
+   │ ① minimax_narrate.py         MiniMax 整段合成           → audio/narration.mp3 / .wav / _16k.wav
    ▼
-narration_16k.wav
-   │ ② transcribe_narration.py  faster-whisper 词级转写   → narration_words.json
+audio/narration_16k.wav
+   │ ② transcribe_narration.py  faster-whisper 词级转写   → audio/narration_words.json
    ▼
-narration_words.json
-   │ ③ build_timeline.py      文案字符 ↔ 词级字符 强制对齐  → timeline.json（真实时间轴）
+audio/narration_words.json
+   │ ③ build_timeline.py      文案字符 ↔ 词级字符 强制对齐  → audio/timeline.json（真实时间轴）
    ▼
-timeline.json + scenes.json
-   │ ④ build_composition.py 数据驱动生成              → index.html
+audio/timeline.json + scenes.json
+   │ ④ build_composition.py 数据驱动生成              → composition/index.html
    ▼
-index.html
-   │ ⑤ npx hyperframes render  渲染无声视觉              → visual.mp4
+composition/index.html
+   │ ⑤ npx hyperframes render  渲染无声视觉              → render/visual_v01.mp4
    ▼
-visual.mp4
-   │ ⑥ merge_audio.py        FFmpeg 后置合成旁白(+BGM)   → final.mp4
+render/visual_v01.mp4
+   │ ⑥ merge_audio.py        FFmpeg 后置合成旁白(+BGM)   → deliver/<主题>_v01.mp4
    ▼
-final.mp4
+deliver/<主题>_v01.mp4
    │ ⑦ verify_audio.py         音频时长/尾段验证          → PASS/FAIL
 ```
 
 ### 完整命令序列（复制即用）
 
+> 下文 `<skill>` 指本技能所在目录，`<任务>` 指 `.super-video/<任务名>`。
+
 ```bash
+# ⓿ 开任务目录（<任务名> 换成内容主题，如 deepseek）
+mkdir -p <任务>
+# 把旁白文案写进 <任务>/script.txt（每行一句）
+
 # ① 合成（密钥解析顺序见 H13，默认读配置文件）
-python scripts/minimax_narrate.py script.txt -o narration \
-    --model speech-2.8-hd --voice female-shaonv
+python <skill>/scripts/minimax_narrate.py <任务>/script.txt \
+    --workdir <任务> --model speech-2.8-hd --voice female-shaonv
 
 # ② 转写
-python scripts/transcribe_narration.py narration_16k.wav -o narration_words.json
+python <skill>/scripts/transcribe_narration.py <任务>/audio/narration_16k.wav \
+    --workdir <任务>
 
 # ③ 对齐（similarity 应 >= 0.9）
-python scripts/build_timeline.py script.txt narration_words.json narration.wav -o timeline.json
+python <skill>/scripts/build_timeline.py <任务>/script.txt \
+    <任务>/audio/narration_words.json <任务>/audio/narration.wav \
+    --workdir <任务>
 
-# ④ 生成 HTML（画面写在 scenes.json）
-python scripts/build_composition.py timeline.json scenes.json \
-    -o index.html --theme assets/theme.css
+# ④ 生成 HTML（画面写在 <任务>/scenes.json）
+python <skill>/scripts/build_composition.py <任务>/audio/timeline.json \
+    <任务>/scenes.json --workdir <任务> --theme <skill>/assets/theme.css
 
-# ⑤ lint + 渲染（先草稿再成片）
+# ⑤ lint + 渲染（在 composition/ 内执行；先草稿再成片）
+cd <任务>/composition
 npx hyperframes lint
-npx hyperframes render --quality draft --output visual_draft.mp4
-npx hyperframes render --quality high  --output visual.mp4
+npx hyperframes render --quality draft --output ../render/visual_v01_draft.mp4
+npx hyperframes render --quality high  --output ../render/visual_v01.mp4
+cd -
 
-# ⑥ 后置合成
-python scripts/merge_audio.py visual.mp4 narration.wav -o final.mp4
-#   可选加 BGM：... --bgm bgm.wav --bgm-gain -26
+# ⑥ 后置合成（默认写入 <任务>/deliver/<任务名>_v01.mp4）
+python <skill>/scripts/merge_audio.py <任务>/render/visual_v01.mp4 \
+    <任务>/audio/narration.wav --workdir <任务>
+#   可选加 BGM：追加 --bgm <任务>/audio/bgm.wav --bgm-gain -26
+#   用户认可后定稿：追加 --version final
 
 # ⑦ 验证
-python scripts/verify_audio.py final.mp4 --min-duration <total> --tail-seconds 12
+python <skill>/scripts/verify_audio.py <任务>/deliver/<任务名>_v01.mp4 \
+    --min-duration <total> --tail-seconds 12
 ```
 
 ### 各步骤要点
@@ -330,7 +381,7 @@ python scripts/verify_audio.py final.mp4 --min-duration <total> --tail-seconds 1
 **① 整段合成（H10）**
 - 把整个 `script.txt` **一次性**丢给 MiniMax，模型自己处理句间语气与停顿。
 - 禁止逐句单独合成再拼固定静音——句子接缝明显、听感机械。
-- 输出 3 个文件：`.mp3`（原始）、`.wav`（44.1k 立体声，混音用）、`_16k.wav`（转写用）。
+- 输出 3 个文件：`.mp3`（原始）、`.wav`（44.1k 立体声，混音用）、`_16k.wav`（转写用），全部落在 `audio/`。
 
 **② 词级转写（H11）**
 - faster-whisper 本地跑，`small` 模型够用，中文务必 `--lang zh`，不要 `.en` 模型（会翻译）。
@@ -340,19 +391,20 @@ python scripts/verify_audio.py final.mp4 --min-duration <total> --tail-seconds 1
 - 用 `difflib.SequenceMatcher` 把「文案字符序列」对齐到「whisper 字符序列」，取 equal 段的时间，缺口线性插值。
 - 归一化只保留 CJK + 拉丁数字、统一小写、去标点/空格，中英混排也稳。
 - **`similarity` 是体检指标**：正常 ≥ 0.9；< 0.85 说明文案与音频差异过大（多半是改了稿没重新合成）。
-- 产出 `timeline.json`：每句/每词的准确时间 + 场景切换点（取句首词时间 - lead）。
+- 产出 `audio/timeline.json`：每句/每词的准确时间 + 场景切换点（取句首词时间 - lead）。
 
 **④ 数据驱动生成（H12）**
 - `scenes.json` **只写画面，不写时间**；时间只在 `timeline.json`，由生成器注入 HTML 的 `data-start`/`data-duration`。
 - 子元素加 `class="reveal"` 自动入场、`class="pop"` 弹出强调。
-- 场景数必须与 `timeline.json` 一致（= script.txt 行数，1 句 1 场景），否则生成器报错退出。
+- 生成器输出 `composition/index.html`；场景数必须与 `timeline.json` 一致（= script.txt 行数，1 句 1 场景），否则报错退出。
 - 画面模板参考 `assets/scenes.example.json`、样式参考 `assets/theme.css`。
 
-**⑤ 渲染**：先 draft 抽帧检查，满意再 high。渲染的是**无声视觉版**。
+**⑤ 渲染**：在 `composition/` 目录内执行，先 draft 抽帧检查，满意再 high。渲染的是**无声视觉版**，产物写进 `render/`（`visual_v01.mp4`，草稿为 `visual_v01_draft.mp4`）。
 
 **⑥ 后置合成（H9）**
-- `merge_audio.py` 把 `narration.wav` 与 `visual.mp4` 合到一起（旁白为准，`apad`+`atrim` 对齐，`-c:v copy` 不重编码视频）。
+- `merge_audio.py` 把 `narration.wav` 与 `visual_v01.mp4` 合到一起（旁白为准，`apad`+`atrim` 对齐，`-c:v copy` 不重编码视频）。
 - 可选 BGM 铺底（`--bgm-gain -26`），旁白必须清晰不被盖。
+- 带 `--workdir` 时默认输出 `<任务>/deliver/<任务名>_v01.mp4`；用户认可后加 `--version final` 定稿。
 
 **⑦ 验证**：音频时长 ≥ 视频时长；尾段非静音（每秒 RMS > -30dB）；全程有声。
 
@@ -406,7 +458,7 @@ edge-tts --voice zh-CN-XiaoyiNeural --text "..." --write-media out.mp3
 
 核心管线去掉音频层的用法（科技资讯、数据可视化、产品介绍等不需要配音的场景）——跳过①-④音频链路，直接走五步：
 
-1. **初始化**：`npx hyperframes init <name> --non-interactive`（模板见 `references/hyperframes-rendering.md`）
+1. **初始化**：在任务目录内 `npx hyperframes init composition --non-interactive`，产物落在 `.super-video/<任务名>/composition/`（模板见 `references/hyperframes-rendering.md`）
 2. **编写 composition**：单场景或多场景骨架 + 数据属性（详见 `references/hyperframes-rendering.md` §2）
 3. **GSAP 动画**：时间轴规则与转场（详见 `references/hyperframes-rendering.md` §3）
 4. **Lint**：`npx hyperframes lint`，0 error 才能渲染
@@ -415,31 +467,36 @@ edge-tts --voice zh-CN-XiaoyiNeural --text "..." --write-media out.mp3
 单场景简单示例：
 
 ```bash
-npx hyperframes init my-video --non-interactive
-# 编辑 index.html（AI 生成内容）后：
-npx hyperframes lint && npx hyperframes render --quiet
+cd <任务>                                  # <任务> = .super-video/<任务名>
+npx hyperframes init composition --non-interactive
+# 编辑 composition/index.html（AI 生成内容）后，在 composition/ 内：
+cd composition
+npx hyperframes lint && npx hyperframes render --quiet --output ../render/visual_v01.mp4
 ```
 
 ### 长音频 BGM 工作流（≥30s 视频，硬约束 H9）
 
 HyperFrames 内置音频处理会在约 32s 处截断长音频，所以超过 30s 的视频一律走「渲染视觉版 → FFmpeg 后置合成全长 WAV」：
 
-1. 准备全长 WAV，时长至少 `root_duration + 3s`（用户要求新音乐或源素材无音频时，用 `python scripts/generate_bgm.py` 本地合成）。
-2. 渲染视觉视频（`<audio>` 的 `data-duration` 照写，但不要相信渲染出的音频）。
+1. 准备全长 WAV，时长至少 `root_duration + 3s`。用户要求新音乐或源素材无音频时，用 `python <skill>/scripts/generate_bgm.py --workdir <任务> --duration <root_duration+3>` 本地合成，落在 `audio/bgm.wav`。
+2. 渲染视觉视频到 `render/visual_v01.mp4`（`<audio>` 的 `data-duration` 照写，但不要相信渲染出的音频）。
 3. FFmpeg 后置合成并验证：
 
 ```bash
-# 合成（不重编码视频）
-ffmpeg -y -i rendered.mp4 -i bgm_full.wav -map 0:v:0 -map 1:a:0 \
-  -c:v copy -c:a aac -b:a 192k -t <root_duration+0.02> \
-  -movflags +faststart final.mp4
+# 合成（不重编码视频；<任务> = .super-video/<任务名>）
+ffmpeg -y -i <任务>/render/visual_v01.mp4 -i <任务>/audio/bgm.wav \
+  -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 192k \
+  -t <root_duration+0.02> -movflags +faststart <任务>/deliver/<主题>_v01.mp4
 
-# 验证：抽出音频流查真实时长与尾段 RMS
-ffmpeg -y -i final.mp4 -vn -ac 1 -ar 44100 extracted_audio.wav
-ffmpeg -ss <root_duration-12> -t 12 -i final.mp4 -af volumedetect -f null /dev/null 2>&1 | grep -E "mean_volume|max_volume"
+# 验证：查音频流真实时长，并测尾段 RMS
+ffprobe -v error -select_streams a:0 \
+  -show_entries stream=codec_name,duration -of csv=p=0 <任务>/deliver/<主题>_v01.mp4
+ffmpeg -ss <root_duration-12> -t 12 -i <任务>/deliver/<主题>_v01.mp4 \
+  -af volumedetect -f null /dev/null 2>&1 | grep -E "mean_volume|max_volume"
 
 # 或用脚本一步验证
-python scripts/verify_audio.py final.mp4 --min-duration <root_duration> --tail-seconds 12
+python <skill>/scripts/verify_audio.py <任务>/deliver/<主题>_v01.mp4 \
+  --min-duration <root_duration> --tail-seconds 12
 ```
 
 通过标准：抽出音频时长 ≥ 视频时长 - 0.1s；末 12 秒每秒 RMS > -30dB；音量可闻不压人声（RMS 均值 -15dB ~ -20dB）。完整细节（含 BGM 生成原则与图层清单）见 `references/hyperframes-rendering.md` §8。
@@ -495,6 +552,7 @@ python scripts/verify_audio.py final.mp4 --min-duration <root_duration> --tail-s
 ### Phase B：写完 HTML、渲染前
 
 ```bash
+cd <任务>/composition
 npx hyperframes lint                                                    # B1: 0 error 才算过
 grep -n "Math.random\|Date.now\|PingFang\|Microsoft YaHei\|Noto Sans" index.html   # B2: 必须为空
 grep -n 'style=.*top:.*%' index.html                                    # B3: 发现即删（H7）
@@ -503,19 +561,23 @@ grep 'data-composition-id.*data-duration\|data-start.*data-duration' index.html 
 
 ### Phase C：渲染后
 
+以下检查针对 `deliver/` 里的成品（`<任务>/deliver/<主题>_v01.mp4`）。
+
 | # | 检查 | 命令 | 通过标准 |
 |---|-------|---------|---------------|
 | C1 | 视频时长 | `ffprobe -show_format` | ≥ 目标 - 0.1s |
 | C2 | 分辨率 | `ffprobe -show_streams` | 匹配用户要求 |
 | C3 | 帧率 | `ffprobe -show_streams` | 30fps（除非用户要求 60fps） |
-| C4 | 混音后音频时长 | 抽 WAV 查长度 | ≥ 视频时长 |
+| C4 | 混音后音频时长 | `ffprobe -select_streams a:0` | ≥ 视频时长 |
 | C5 | 末 12s 无静音 | 逐秒 RMS | 每秒 > -30dB |
 | C6 | 音频均量 | `volumedetect` | -15dB ~ -20dB |
 
 ### Phase D：布局与视觉完整性（每个视频都做）
 
 ```bash
-ffmpeg -ss <mid_time> -i final.mp4 -frames:v 1 -q:v 2 check_scene_N.jpg   # 抽场景中点关键帧
+# 抽场景中点关键帧到系统临时目录（不落在任务目录里，检查完即弃）
+ffmpeg -ss <mid_time> -i <任务>/deliver/<主题>_v01.mp4 \
+  -frames:v 1 -q:v 2 "<系统临时目录>/check_scene_N.jpg"
 ```
 
 通用检查：内容在画布内无裁切（H6）；文字无重叠不可读；卡片间距均匀无挤压；关键信息可读（字号、对比度）；过渡流畅无跳切（除非用户要求跳切风格）。使用软默认布局时额外检查：标题在顶部可见不与内容重叠；卡片都在安全区内。
@@ -549,7 +611,7 @@ ffmpeg -ss <mid_time> -i final.mp4 -frames:v 1 -q:v 2 check_scene_N.jpg   # 抽�
 - **竖版 1080×1920**：标题 top 120-180px；主体 360-1560px；底部 320px 留给平台 UI；左右边距 60-80px；单列卡片优先，2-3s 一个信息点；主标题 72-96px，正文 38-52px，关键数字 96-132px。
 - **图标**：优先 CSS/SVG/文字图标，不依赖外部 icon 库；禁止无法离线解析的 icon font；emoji 仅在语义明确、尺寸一致时使用，不替代关键信息。
 - **性能与渲染策略**：draft 调试、standard 常规交付、high/60fps 仅在用户要求或精品交付时用；控制 DOM 数量，避免大量滤镜、超大阴影、复杂 SVG path；Chrome 崩溃时减 workers、降粒子、拆场景或降质量重试。
-- **交付与文件**：命名 `topic_style_v01.mp4`，返工递增版本，最终版用 `_final`；保留 `index.html`、最终 MP4、最终音频源和关键配置；交付必须以附件返回最终 MP4，并说明分辨率、时长、是否含音频、做过哪些验证。
+- **交付与文件**：产物全部落在 `.super-video/<任务名>/`（见「产物目录约定」）；成片命名 `<主题>_v01.mp4`，返工递增 `_v02`…，用户认可后定稿 `_final`；过程产物原样留在任务目录内，不主动清理；交付必须以附件返回 `deliver/` 里的成片，并说明分辨率、时长、是否含音频、做过哪些验证。
 
 多分辨率字号/安全区速查、渲染耗时估算、性能优化细则见 `references/advanced-delivery-and-quality.md`。
 
@@ -611,18 +673,19 @@ ffmpeg -ss <mid_time> -i final.mp4 -frames:v 1 -q:v 2 check_scene_N.jpg   # 抽�
 | `references/talking-head-pipeline-full.md` | 完整口播后期模板、混音策略与防错清单 |
 | `references/advanced-delivery-and-quality.md` | 高级修复、多分辨率、性能、交付和质量门禁 |
 
-脚本（`scripts/`）：
+脚本（`scripts/`，全部支持 `--workdir <任务目录>`，产物自动落到对应子目录）：
 
-| 脚本 | 用途 |
-|------|------|
-| `minimax_narrate.py` | MiniMax 整段旁白合成（环境变量取 Key） |
-| `transcribe_narration.py` | faster-whisper 词级转写 |
-| `build_timeline.py` | 文案 ↔ 词级时间戳强制对齐 → timeline.json |
-| `build_composition.py` | 由 timeline.json + scenes.json 生成 index.html |
-| `merge_audio.py` | FFmpeg 后置合成旁白(+BGM) |
-| `generate_bgm.py` | 无外部依赖的本地 BGM 生成 |
-| `verify_audio.py` | 最终视频音频时长和尾段可听性验证 |
-| `text_units.py` | 共享模块：中文分词与时间单元切分（被 build_timeline 引用，场景切换点取首词时间） |
+| 脚本 | 用途 | 默认产物（带 --workdir） |
+|------|------|--------------------------|
+| `minimax_narrate.py` | MiniMax 整段旁白合成（环境变量取 Key） | `audio/narration.mp3/.wav/_16k.wav` |
+| `transcribe_narration.py` | faster-whisper 词级转写 | `audio/narration_words.json` |
+| `build_timeline.py` | 文案 ↔ 词级时间戳强制对齐 | `audio/timeline.json` |
+| `build_composition.py` | 由 timeline.json + scenes.json 生成 HTML | `composition/index.html` |
+| `merge_audio.py` | FFmpeg 后置合成旁白(+BGM) | `deliver/<任务名>_<版本>.mp4` |
+| `generate_bgm.py` | 无外部依赖的本地 BGM 生成 | `audio/bgm.wav` |
+| `verify_audio.py` | 最终视频音频时长和尾段可听性验证 | 只读，不落盘 |
+| `task_paths.py` | 共享模块：解析/创建任务目录下的产物路径（被以上脚本引用） | — |
+| `text_units.py` | 共享模块：中文分词与时间单元切分（被 build_timeline 引用，场景切换点取首词时间） | — |
 
 资源（`assets/`）：
 

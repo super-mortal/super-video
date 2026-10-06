@@ -155,7 +155,7 @@ npx hyperframes render --strict-variables  # Fail on undeclared keys
 
 ## File Organization
 
-All files live at the project root alongside `index.html`:
+HyperFrames 自身约定：composition 项目内的文件与 `index.html` 同级：
 ```
 my-video/
 ├── index.html              # Root composition
@@ -171,3 +171,5 @@ my-video/
 ```
 
 Sub-compositions use `../` to reference root-level assets.
+
+> 在 super-video 中，这个项目根目录即任务目录 `.super-video/<任务名>/composition/`。音频与成片不放在这里——分别归 `audio/` 与 `deliver/`（见 `SKILL.md` 的「产物目录约定」）。渲染一律用 `--output ../render/xxx.mp4` 指向 `render/`，不要留在 `composition/renders/`。

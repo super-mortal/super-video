@@ -11,6 +11,8 @@ of sync with the narration.
 Usage:
     python build_composition.py timeline.json scenes.json -o index.html \
         --width 1920 --height 1080 [--theme theme.css]
+    python build_composition.py .super-video/my-task/audio/timeline.json \
+        .super-video/my-task/scenes.json --workdir .super-video/my-task
 
 scenes.json format:
 {
@@ -27,6 +29,8 @@ scenes.json format:
   Add class="reveal" to child elements for an automatic entrance; class="pop"
   for a pop-in emphasis.
 
+With --workdir the default output becomes <workdir>/composition/index.html.
+
 Dependencies: none beyond the standard library. Run `hyperframes lint`
 after generating.
 """
@@ -37,6 +41,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
+from task_paths import resolve_output
 
 
 DEFAULT_CSS = r'''
@@ -200,8 +206,14 @@ def main() -> int:
         description="Build index.html from timeline.json + scenes.json")
     parser.add_argument("timeline", help="timeline.json produced by build_timeline.py")
     parser.add_argument("scenes", help="scenes.json with per-scene html specs")
-    parser.add_argument("-o", "--output", default="index.html",
-                        help="output HTML file path (default: index.html)")
+    parser.add_argument("-o", "--output", default=None,
+                        help="output HTML file path (default: "
+                             "<workdir>/composition/index.html, or "
+                             "./index.html when --workdir is omitted)")
+    parser.add_argument("--workdir", default=None,
+                        help="Task directory, e.g. .super-video/my-task; when "
+                             "set, the default output lands in "
+                             "<workdir>/composition/")
     parser.add_argument("--width", type=int, default=1920,
                         help="composition width in px (default: 1920)")
     parser.add_argument("--height", type=int, default=1080,
@@ -224,9 +236,11 @@ def main() -> int:
     doc = build_html_document(
         timeline_data, scene_data, args.width, args.height, theme_css)
 
-    Path(args.output).write_text(doc, encoding="utf-8")
+    output_path = resolve_output(args.output, args.workdir, "composition",
+                                 "index.html")
+    output_path.write_text(doc, encoding="utf-8")
     total = round(float(timeline_data["total"]), 3)
-    print(f"{args.output} written: {len(doc)} bytes, "
+    print(f"{output_path} written: {len(doc)} bytes, "
           f"scenes={len(timeline_scenes)}, total={total}s")
     for i, timed_scene in enumerate(timeline_scenes):
         print(f"  scene-{i}: {timed_scene['start']:.2f}-{timed_scene['end']:.2f}  "

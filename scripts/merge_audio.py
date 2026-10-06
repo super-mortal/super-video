@@ -10,6 +10,13 @@ Usage:
     python merge_audio.py visual.mp4 narration.wav -o final.mp4
     python merge_audio.py visual.mp4 narration.wav --bgm bgm.wav \
         --bgm-gain -26 -o final.mp4
+    python merge_audio.py .super-video/my-task/render/visual_v01.mp4 \
+        .super-video/my-task/audio/narration.wav \
+        --workdir .super-video/my-task
+
+    With --workdir and no -o, the deliverable is written to
+    <workdir>/deliver/<task>_<version>.mp4 (version defaults to v01; pass
+    --version final for the approved cut).
 
 Mixing rules:
     - The narration audio is authoritative (total audio length == video
@@ -29,6 +36,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from task_paths import resolve_output, task_topic
 
 
 def find_executable(name: str) -> str:
@@ -63,14 +72,30 @@ def main() -> int:
         description="Mux narration audio (+ optional BGM) into a silent video")
     ap.add_argument("video", help="Silent visual video (mp4)")
     ap.add_argument("narration", help="Narration audio (wav/mp3)")
-    ap.add_argument("-o", "--output", default="final.mp4",
-                    help="Output video path")
+    ap.add_argument("-o", "--output", default=None,
+                    help="Output video path (default: <workdir>/deliver/"
+                         "<task>_<version>.mp4, or ./final.mp4 when --workdir "
+                         "is omitted)")
+    ap.add_argument("--workdir", default=None,
+                    help="Task directory, e.g. .super-video/my-task; when set, "
+                         "the deliverable lands in <workdir>/deliver/")
+    ap.add_argument("--version", default="v01",
+                    help="Version label used in the default deliverable name "
+                         "when --workdir is set (default: v01; pass 'final' "
+                         "for the approved cut)")
     ap.add_argument("--bgm", default=None, help="Optional background music")
     ap.add_argument("--bgm-gain", type=float, default=-26.0,
                     help="BGM attenuation in dB (default -26, negative)")
     ap.add_argument("--narration-gain", type=float, default=0.0,
                     help="Narration audio gain in dB (default 0)")
     args = ap.parse_args()
+
+    if args.workdir:
+        default_name = f"{task_topic(args.workdir)}_{args.version}.mp4"
+    else:
+        default_name = "final.mp4"
+    output_path = resolve_output(args.output, args.workdir, "deliver",
+                                 default_name)
 
     video_duration = probe_duration(args.video)
     narration_duration = probe_duration(args.narration)
@@ -98,9 +123,9 @@ def main() -> int:
                "-c:v", "copy",
                "-c:a", "aac", "-b:a", "192k", "-ar", "44100",
                "-shortest", "-movflags", "+faststart",
-               args.output)
-    output_size = Path(args.output).stat().st_size
-    print(f"OK -> {args.output}  size={output_size} bytes")
+               str(output_path))
+    output_size = output_path.stat().st_size
+    print(f"OK -> {output_path}  size={output_size} bytes")
     return 0
 
 

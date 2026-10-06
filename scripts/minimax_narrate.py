@@ -9,6 +9,8 @@ references/narration-sync-pipeline.md).
 Usage:
     python minimax_narrate.py script.txt -o narration \
         --model speech-2.8-hd --voice female-shaonv
+    python minimax_narrate.py .super-video/my-task/script.txt \
+        --workdir .super-video/my-task
 
 Credentials (resolved in order, first hit wins):
     1. --api-key CLI argument (per-run, never stored)
@@ -29,6 +31,10 @@ Outputs:
     <out>.wav           44.1 kHz stereo WAV (for final mixdown)
     <out>_16k.wav       16 kHz mono WAV (for faster-whisper transcription)
 
+    <out> defaults to narration (in the current directory). With --workdir it
+    defaults to <workdir>/audio/narration instead, so every artefact of one
+    job stays inside the task directory.
+
 Exit codes: 0 success; non-zero on failure (missing key / API error / no audio).
 """
 from __future__ import annotations
@@ -41,6 +47,8 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+
+from task_paths import resolve_output
 
 DEFAULT_BASE = "https://api.minimaxi.com/v1/t2a_v2"
 CONFIG_KEY_PATH = Path.home() / ".config" / "minimax" / "api_key"
@@ -196,8 +204,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="MiniMax whole-passage narration synthesis")
     ap.add_argument("script", help="Narration script txt file (UTF-8)")
-    ap.add_argument("-o", "--out", default="narration",
-                    help="Output prefix (default: narration)")
+    ap.add_argument("-o", "--out", default=None,
+                    help="Output prefix (default: <workdir>/audio/narration, "
+                         "or ./narration when --workdir is omitted)")
+    ap.add_argument("--workdir", default=None,
+                    help="Task directory, e.g. .super-video/my-task; when set, "
+                         "outputs default to <workdir>/audio/")
     ap.add_argument("--model", default="speech-2.8-hd",
                     help="Model name, lowercase with exact version "
                          "(default: speech-2.8-hd)")
@@ -222,8 +234,9 @@ def main() -> int:
         print("ERROR: narration script is empty.", file=sys.stderr)
         return 2
 
-    wav_path = synthesize_narration(text, args.out, args.model, args.voice,
-                                    args.base_url, api_key)
+    out_prefix = resolve_output(args.out, args.workdir, "audio", "narration")
+    wav_path = synthesize_narration(text, str(out_prefix), args.model,
+                                    args.voice, args.base_url, api_key)
     if wav_path is None:
         return 1
     report_result(wav_path, text, args.model, args.voice)
