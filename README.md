@@ -1,6 +1,42 @@
-# 超级视频（super-video）
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="超级视频 super-video —— 一段写好的文案，一键成为带中文配音与同步字幕的成片">
+</p>
 
-把一段写好的脚本，从零做成**配音、同步字幕、动画画面**齐备的成片视频。全程 AI 自动化，无需真人出镜，无需视频剪辑软件。
+<h3 align="center">把写好的脚本，从零做成配音、同步字幕、动画画面齐备的成片视频</h3>
+<p align="center">全程 AI 自动化 · 无需真人出镜 · 无需视频剪辑软件</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-0.0.4-1A1A18?style=flat-square" alt="version 0.0.4">
+  <img src="https://img.shields.io/badge/license-MIT-1A1A18?style=flat-square" alt="license MIT">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-1A1A18?style=flat-square" alt="platforms">
+</p>
+
+## 安装
+
+本技能是一个标准的 Agent Skill，可通过 [`skills`](https://skills.sh) CLI 一行安装（任一即可）：
+
+```bash
+# 安装到当前项目（交互式选择目标 Agent）
+npx skills add super-mortal/super-video
+
+# 安装到用户目录，所有项目可用
+npx skills add super-mortal/super-video -g
+
+# 非交互安装到指定 Agent（CI 友好）
+npx skills add super-mortal/super-video --skill super-video -a codebuddy -y
+```
+
+```bash
+# 先看看仓库里有哪些技能，不安装
+npx skills add super-mortal/super-video --list
+
+# 用复制而非软链安装（跨机器更稳）
+npx skills add super-mortal/super-video --copy
+```
+
+> 兼容 Cursor、Claude Code、Codex、CodeBuddy 等 60+ 种 Agent；安装时会自动探测本机环境并写入对应目录（项目级 `./.<agent>/skills/`，全局 `~/.<agent>/skills/`）。
+
+安装完成后，还需按下方[环境要求](#环境要求)准备运行依赖（Node.js、FFmpeg、Python、faster-whisper、MiniMax 密钥），即可开始生成视频。
 
 ## 实操效果展示
 
@@ -31,24 +67,6 @@
  ⑥ merge_audio.py          FFmpeg 后置合成旁白(+BGM)   → deliver/<主题>_v01.mp4（成品）
  ⑦ verify_audio.py         音频时长/尾段验证           → PASS/FAIL
 ```
-
-## 产物目录
-
-一次任务的全部产物都归档在**当前工作目录**下的 `.super-video/<任务名>/`，不会散落各处：
-
-```
-.super-video/<任务名>/
-├── script.txt          旁白文案（每行一句）
-├── scenes.json         画面脚本（只写画面，不写时间）
-├── audio/              音频与时间轴
-├── composition/        HTML 画面（index.html）
-├── render/             半成品：无声视觉版
-└── deliver/            成品：含配音的成片
-```
-
-所有脚本支持 `--workdir <任务目录>`，默认产物自动落到对应子目录并创建父目录；显式 `-o` 仍然优先。
-
-时间轴的唯一真源是**从真实音频反推的词级时间戳**，画面与字幕的全部时间由它生成——因此换音色、改稿重跑之后，音画永远同步。
 
 ## 环境要求
 
@@ -107,6 +125,26 @@ python <skill>/scripts/verify_audio.py <任务>/deliver/<任务名>_v01.mp4 \
 | 御姐 | `female-yujie` |
 | 甜美 | `female-tianmei` |
 | 新闻主播 | `Chinese (Mandarin)_News_Anchor` |
+
+无密钥时可免费回退 Edge-TTS（女声 `zh-CN-XiaoyiNeural` / 男声 `zh-CN-YunxiNeural`），仍走同一管线。
+
+## 产物目录
+
+一次任务的全部产物都归档在**当前工作目录**下的 `.super-video/<任务名>/`，不会散落各处：
+
+```
+.super-video/<任务名>/
+├── script.txt          旁白文案（每行一句）
+├── scenes.json         画面脚本（只写画面，不写时间）
+├── audio/              音频与时间轴
+├── composition/        HTML 画面（index.html）
+├── render/             半成品：无声视觉版
+└── deliver/            成品：含配音的成片
+```
+
+所有脚本支持 `--workdir <任务目录>`，默认产物自动落到对应子目录并创建父目录；显式 `-o` 仍然优先。
+
+时间轴的唯一真源是**从真实音频反推的词级时间戳**，画面与字幕的全部时间由它生成——因此换音色、改稿重跑之后，音画永远同步。
 
 ## 目录结构
 
